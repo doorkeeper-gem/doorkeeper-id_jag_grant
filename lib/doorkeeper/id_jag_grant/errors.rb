@@ -15,6 +15,14 @@ module Doorkeeper
       # RFC 8693 Token Exchange requesting an unsupported +requested_token_type+.
       class UnsupportedTokenType < Doorkeeper::Errors::BaseResponseError
       end
+
+      # RFC 8693 §3 / draft §4.3.3: the subject token is not bound to the
+      # requesting client. The host application's +validate_subject_token+
+      # hook returned false (or raised), indicating the binding check failed:
+      # JWT `aud` claim, SAML `Audience`, or refresh-token ownership does not
+      # match the client.
+      class InvalidTarget < Doorkeeper::Errors::BaseResponseError
+      end
     end
   end
 end

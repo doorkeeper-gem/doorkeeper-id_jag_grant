@@ -156,6 +156,206 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
       expect(json_response["error"]).to eq("invalid_scope")
     end
 
+    describe "subject token validation (draft §4.3.3)" do
+      # Common configuration for the IdP role, extended with validation hooks.
+      def configure_idp(*hooks)
+        test = self
+        issuer_url = idp_issuer
+        Doorkeeper.configure do
+          orm :active_record
+          grant_flows %w[token_exchange]
+          default_scopes :read
+          optional_scopes :write
+        end
+        Doorkeeper::IdJagGrant.configure do
+          issuer issuer_url
+          assertion_encoder(lambda do |claims, _context|
+            payload = claims.payload.merge("sub" => "user-42")
+            test.encode_jwt(claims.header, payload)
+          end)
+          hooks.each do |(name, value)|
+            public_send(name, value)
+          end
+        end
+      end
+
+      context "with validate_subject_token hook (audience/client binding)" do
+        context "when the subject token audience is bound to the client" do
+          before do
+            configure_idp(
+              [:validate_subject_token, ->(_subj, _type, _c) { true }],
+            )
+          end
+
+          it "allows the exchange" do
+            post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+            expect(response).to have_http_status(:ok)
+            expect(json_response["issued_token_type"]).to eq(Doorkeeper::IdJagGrant::TOKEN_TYPE_ID_JAG)
+          end
+        end
+
+        context "when the subject token audience does not match the client" do
+          before do
+            configure_idp(
+              [:validate_subject_token, ->(_subj, _type, _c) { false }],
+            )
+          end
+
+          it "rejects the exchange with invalid_target" do
+            post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+            expect(response).to have_http_status(:bad_request)
+            expect(json_response["error"]).to eq("invalid_target")
+          end
+        end
+
+        context "when the hook raises an exception" do
+          before do
+            configure_idp(
+              [:validate_subject_token, ->(_subj, _type, _c) { raise StandardError, "boom" }],
+            )
+          end
+
+          it "rejects the exchange with invalid_target" do
+            post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+            expect(response).to have_http_status(:bad_request)
+            expect(json_response["error"]).to eq("invalid_target")
+          end
+        end
+
+        context "when the hook is not configured" do
+          before do
+            configure_idp
+          end
+
+          it "allows the exchange (hook is optional)" do
+            post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+            expect(response).to have_http_status(:ok)
+          end
+        end
+      end
+
+      context "with enforce_refresh_token_policy hook" do
+        let(:refresh_token_subject) { "the-refresh-token-value" }
+
+        def exchange_refresh_token
+          exchange_params(
+            subject_token: refresh_token_subject,
+            subject_token_type: Doorkeeper::IdJagGrant::TOKEN_TYPE_REFRESH_TOKEN,
+          )
+        end
+
+        context "when the policy allows the exchange" do
+          before do
+            configure_idp(
+              [:enforce_refresh_token_policy, ->(_subj, _c) { true }],
+            )
+          end
+
+          it "allows the exchange" do
+            post "/oauth/token", params: exchange_refresh_token, headers: authorization(client)
+
+            expect(response).to have_http_status(:ok)
+            expect(json_response["issued_token_type"]).to eq(Doorkeeper::IdJagGrant::TOKEN_TYPE_ID_JAG)
+          end
+        end
+
+        context "when the policy denies the exchange" do
+          before do
+            configure_idp(
+              [:enforce_refresh_token_policy, ->(_subj, _c) { false }],
+            )
+          end
+
+          it "rejects with invalid_grant" do
+            post "/oauth/token", params: exchange_refresh_token, headers: authorization(client)
+
+            expect(response).to have_http_status(:bad_request)
+            expect(json_response["error"]).to eq("invalid_grant")
+          end
+        end
+
+        context "when the hook raises an exception" do
+          before do
+            configure_idp(
+              [:enforce_refresh_token_policy, ->(_subj, _c) { raise StandardError, "boom" }],
+            )
+          end
+
+          it "rejects with invalid_grant when the policy hook raises an exception" do
+            post "/oauth/token", params: exchange_refresh_token, headers: authorization(client)
+
+            expect(response).to have_http_status(:bad_request)
+            expect(json_response["error"]).to eq("invalid_grant")
+          end
+        end
+
+        context "when the subject token is an ID token, not a refresh token" do
+          let(:policy_hook) { double("policy_hook") }
+
+          before do
+            allow(policy_hook).to receive(:call).and_return(false)
+            configure_idp(
+              [:enforce_refresh_token_policy, policy_hook],
+            )
+          end
+
+          it "does not invoke the policy hook (skips for non-refresh tokens)" do
+            post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+            expect(response).to have_http_status(:ok)
+            expect(policy_hook).not_to have_received(:call)
+          end
+        end
+
+        context "when the hook is not configured" do
+          before do
+            configure_idp
+          end
+
+          it "allows the refresh-token exchange (hook is optional)" do
+            post "/oauth/token", params: exchange_refresh_token, headers: authorization(client)
+
+            expect(response).to have_http_status(:ok)
+          end
+        end
+      end
+
+      context "when both hooks are configured together" do
+        before do
+          configure_idp(
+            [:validate_subject_token, ->(_subj, _type, _c) { true }],
+            [:enforce_refresh_token_policy, ->(_subj, _c) { true }],
+          )
+        end
+
+        it "allows valid exchanges" do
+          post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+          expect(response).to have_http_status(:ok)
+        end
+
+        it "rejects when the refresh token policy fails" do
+          configure_idp(
+            [:validate_subject_token, ->(_subj, _type, _c) { true }],
+            [:enforce_refresh_token_policy, ->(_subj, _c) { false }],
+          )
+
+          params = exchange_params(
+            subject_token: "refresh-token",
+            subject_token_type: Doorkeeper::IdJagGrant::TOKEN_TYPE_REFRESH_TOKEN,
+          )
+          post "/oauth/token", params: params, headers: authorization(client)
+
+          expect(response).to have_http_status(:bad_request)
+          expect(json_response["error"]).to eq("invalid_grant")
+        end
+      end
+    end
+
     context "when no encoder is configured" do
       before do
         issuer_url = idp_issuer
@@ -167,6 +367,33 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
         end
         Doorkeeper::IdJagGrant.configure do
           issuer issuer_url
+        end
+      end
+
+      it "rejects the request with invalid_request" do
+        post "/oauth/token", params: exchange_params, headers: authorization(client)
+
+        expect(response).to have_http_status(:bad_request)
+        expect(json_response["error"]).to eq("invalid_request")
+      end
+    end
+
+    context "when the assertion_encoder does not set the required 'sub' claim" do
+      before do
+        test = self
+        issuer_url = idp_issuer
+        Doorkeeper.configure do
+          orm :active_record
+          grant_flows %w[token_exchange]
+          default_scopes :read
+          optional_scopes :write
+        end
+        Doorkeeper::IdJagGrant.configure do
+          issuer issuer_url
+          assertion_encoder(lambda do |claims, _context|
+            # Deliberately omits `sub` — the post-encode guard must catch this.
+            test.encode_jwt(claims.header, claims.payload)
+          end)
         end
       end
 

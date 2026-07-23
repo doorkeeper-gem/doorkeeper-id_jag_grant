@@ -144,6 +144,26 @@ module Doorkeeper
       #   @return [#consume, nil]
       option :replay_store, default: nil
 
+      # @!attribute [r] validate_subject_token
+      #   IdP role: optional `(subject_token, subject_token_type, Doorkeeper::Application) -> Boolean`
+      #   hook that validates the subject token's audience is bound to the
+      #   requesting client (draft §4.3.3). For JWT subject tokens the `aud`
+      #   claim MUST match the client; for SAML assertions the audience MUST
+      #   match; for refresh tokens the token MUST belong to the client.
+      #   Returning false/nil rejects the exchange with +invalid_target+.
+      #   @return [#call, nil]
+      option :validate_subject_token, default: nil
+
+      # @!attribute [r] enforce_refresh_token_policy
+      #   IdP role: optional `(subject_token, Doorkeeper::Application) -> Boolean` hook that
+      #   enforces refresh-token lifecycle policy when the +subject_token_type+
+      #   is a refresh token (draft §4.3.3). The host application is expected to
+      #   look up the refresh token, verify it belongs to the client and is not
+      #   expired/revoked, and determine whether the exchange is permitted.
+      #   Returning false/nil rejects the exchange with +invalid_grant+.
+      #   @return [#call, nil]
+      option :enforce_refresh_token_policy, default: nil
+
       # @!attribute [r] assertion_encoder
       #   IdP role: signs an ID-JAG. A callable +(claims, context) -> String+
       #   that receives a {Doorkeeper::IdJagGrant::OAuth::IdJag::Claims} object
