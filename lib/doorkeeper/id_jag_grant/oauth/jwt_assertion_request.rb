@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "jwt"
+
 module Doorkeeper
   module IdJagGrant
     module OAuth
@@ -16,6 +18,8 @@ module Doorkeeper
       # checks on the returned claims.
       class JwtAssertionRequest < Doorkeeper::OAuth::BaseRequest
         include Doorkeeper::OAuth::Helpers
+
+        REQUIRED_CLAIMS = %w[iss sub aud client_id jti exp iat].freeze
 
         validate :params, error: Doorkeeper::Errors::InvalidRequest
         validate :client, error: Doorkeeper::Errors::InvalidClient
@@ -76,9 +80,10 @@ module Doorkeeper
           result.success? ? result.claims : nil
         end
 
-        # The custom decoder is fully responsible for verifying the signature
-        # and issuer trust; Doorkeeper then applies the §4.4.1 claim checks
-        # (typ, aud, client_id continuity) on the returned claims here.
+        # The custom decoder is fully responsible for signature and issuer trust.
+        # Doorkeeper then applies the §4.4.1 profile checks on returned claims
+        # (typed JWT header, required claims, temporal checks, replay, audience,
+        # and client_id continuity).
         def decode_with_custom_hook
           claims =
             begin
@@ -96,19 +101,61 @@ module Doorkeeper
         # §4.4.1 claim checks applied to the custom-decoder path (the built-in
         # verifier already enforces these during decode).
         def valid_custom_claims?(claims)
-          typ_ok = claims["typ"].nil? || claims["typ"] == IdJag::Claims::TYP
-          typ_ok && valid_audience?(claims) && claims["client_id"] == client.uid
+          valid_typed_header? &&
+            required_claims_present?(claims) &&
+            valid_temporal_claims?(claims) &&
+            valid_replay?(claims) &&
+            valid_audience?(claims) &&
+            claims["client_id"] == client.uid
         end
 
         # §4.4.1: the `aud` claim MUST identify this Resource Authorization
         # Server. It may be a string or a single-element array.
         def valid_audience?(claims)
           expected = id_jag_config.audience_value
-          return true if expected.blank?
+          return false if expected.blank?
 
           aud = claims["aud"]
           aud = aud.first if aud.is_a?(Array) && aud.size == 1
           aud == expected
+        end
+
+        def valid_typed_header?
+          _payload, header = JWT.decode(@assertion, nil, false)
+          header["typ"] == IdJag::Claims::TYP
+        rescue JWT::DecodeError
+          false
+        end
+
+        def required_claims_present?(claims)
+          REQUIRED_CLAIMS.all? { |claim| claims[claim].present? }
+        end
+
+        def valid_temporal_claims?(claims)
+          now = Time.now.to_i
+          skew = id_jag_config.clock_skew.to_i
+
+          exp = Integer(claims["exp"])
+          iat = Integer(claims["iat"])
+          return false if exp < now - skew
+          return false if iat > now + skew
+
+          return true unless claims.key?("nbf")
+
+          nbf = Integer(claims["nbf"])
+          nbf <= now + skew
+        rescue ArgumentError, TypeError
+          false
+        end
+
+        def valid_replay?(claims)
+          store = id_jag_config.replay_store
+          return true unless store
+
+          exp = Integer(claims["exp"])
+          store.consume(claims["jti"], claims["iss"], exp)
+        rescue ArgumentError, TypeError
+          false
         end
 
         def assertion_context

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 module Doorkeeper
   module IdJagGrant
     module OAuth
@@ -29,6 +31,8 @@ module Doorkeeper
         validate :client_supports_grant_flow, error: Doorkeeper::Errors::UnauthorizedClient
         validate :requested_token_type, error: Doorkeeper::IdJagGrant::Errors::UnsupportedTokenType
         validate :subject_token_type, error: Doorkeeper::Errors::InvalidRequest
+        validate :actor_token_type, error: Doorkeeper::Errors::InvalidRequest
+        validate :authorization_details, error: Doorkeeper::Errors::InvalidRequest
         validate :encoder_configured, error: Doorkeeper::Errors::InvalidRequest
         validate :scopes, error: Doorkeeper::Errors::InvalidScope
 
@@ -62,6 +66,7 @@ module Doorkeeper
               assertion: issue_assertion,
               scope: scopes.to_s,
               expires_in: id_jag_config.expires_in,
+              authorization_details: @authorization_details,
             )
             after_successful_response
             @response
@@ -153,6 +158,26 @@ module Doorkeeper
 
         def validate_subject_token_type
           ACCEPTED_SUBJECT_TOKEN_TYPES.include?(@subject_token_type)
+        end
+
+        def validate_actor_token_type
+          return true if @actor_token.blank?
+
+          @actor_token_type.present?
+        end
+
+        def validate_authorization_details
+          return true if @authorization_details.blank?
+          return true if @authorization_details.is_a?(Array)
+          return false unless @authorization_details.is_a?(String)
+
+          parsed = JSON.parse(@authorization_details)
+          return false unless parsed.is_a?(Array)
+
+          @authorization_details = parsed
+          true
+        rescue JSON::ParserError
+          false
         end
 
         def validate_encoder_configured

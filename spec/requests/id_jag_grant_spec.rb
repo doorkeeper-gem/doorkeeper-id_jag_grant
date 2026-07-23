@@ -109,6 +109,37 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
       expect(json_response["error"]).to eq("invalid_request")
     end
 
+    it "requires actor_token_type when actor_token is present" do
+      post "/oauth/token",
+           params: exchange_params(actor_token: "actor-token").except(:actor_token_type),
+           headers: authorization(client)
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response["error"]).to eq("invalid_request")
+    end
+
+    it "accepts JSON authorization_details and echoes the granted value" do
+      details = [{ "type" => "chat_read", "actions" => ["read"] }]
+
+      post "/oauth/token",
+           params: exchange_params(authorization_details: details.to_json),
+           headers: authorization(client)
+
+      expect(response).to have_http_status(:ok)
+      expect(json_response["authorization_details"]).to eq(details)
+      claims = decode_jwt(json_response["access_token"])
+      expect(claims["authorization_details"]).to eq(details)
+    end
+
+    it "rejects non-array authorization_details" do
+      post "/oauth/token",
+           params: exchange_params(authorization_details: "{\"type\":\"chat_read\"}"),
+           headers: authorization(client)
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response["error"]).to eq("invalid_request")
+    end
+
     it "requires client authentication" do
       post "/oauth/token", params: exchange_params
 
@@ -225,6 +256,15 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
     it "rejects an ID-JAG whose aud does not match this server's audience" do
       post "/oauth/token",
            params: bearer_params(id_jag("aud" => "https://someone-else.example/")),
+           headers: authorization(client)
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response["error"]).to eq("invalid_grant")
+    end
+
+    it "rejects an ID-JAG whose aud is a multi-valued array" do
+      post "/oauth/token",
+           params: bearer_params(id_jag("aud" => [idp_issuer, "https://other.example/"])),
            headers: authorization(client)
 
       expect(response).to have_http_status(:bad_request)
@@ -458,8 +498,8 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
         "iat" => now,
         "exp" => now + 300,
         "scope" => "read",
-      }.merge(overrides)
-      encode_jwt({ "typ" => "oauth-id-jag+jwt" }, payload)
+      }.merge(overrides).compact
+      JWT.encode(payload, JwtTestHelper::SIGNING_KEY, "HS256", { typ: "oauth-id-jag+jwt" })
     end
 
     def bearer_params(assertion)
@@ -492,6 +532,24 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
 
       post "/oauth/token",
            params: bearer_params(id_jag("client_id" => other.uid)),
+           headers: authorization(client)
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response["error"]).to eq("invalid_grant")
+    end
+
+    it "rejects a decoded assertion missing required claims" do
+      post "/oauth/token",
+           params: bearer_params(id_jag("exp" => nil)),
+           headers: authorization(client)
+
+      expect(response).to have_http_status(:bad_request)
+      expect(json_response["error"]).to eq("invalid_grant")
+    end
+
+    it "rejects a decoded assertion with a multi-valued aud array" do
+      post "/oauth/token",
+           params: bearer_params(id_jag("aud" => [idp_issuer, "https://other.example/"])),
            headers: authorization(client)
 
       expect(response).to have_http_status(:bad_request)
