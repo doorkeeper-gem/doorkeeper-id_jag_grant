@@ -113,6 +113,7 @@ module Doorkeeper
               claims = attempt_decode(assertion, key, options)
               next unless claims
               next unless valid_iat?(claims, skew)
+              next unless valid_audience_claim?(claims["aud"], config.audience_value)
               next unless claims["client_id"] == client.uid
 
               return claims
@@ -161,6 +162,21 @@ module Doorkeeper
             claims["iat"].to_i <= Time.now.to_i + skew
           end
           private_class_method :valid_iat?
+
+          # The ID-JAG profile allows either a single audience string or a
+          # single-element audience array. Multi-valued `aud` arrays are rejected.
+          def valid_audience_claim?(audience_claim, expected_audience)
+            return false if expected_audience.blank?
+
+            if audience_claim.is_a?(Array)
+              return false unless audience_claim.size == 1
+
+              return audience_claim.first == expected_audience
+            end
+
+            audience_claim == expected_audience
+          end
+          private_class_method :valid_audience_claim?
 
           # Builds the `verify_jti:` decode option: a `#call(jti, payload)`
           # validator the `jwt` gem invokes as part of claim verification.

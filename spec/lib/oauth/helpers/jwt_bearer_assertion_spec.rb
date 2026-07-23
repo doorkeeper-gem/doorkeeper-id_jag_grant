@@ -79,6 +79,13 @@ RSpec.describe Doorkeeper::IdJagGrant::OAuth::Helpers::JwtBearerAssertion do
       expect(result).not_to be_success
     end
 
+    it "fails when the audience is a multi-valued array" do
+      result =
+        described_class.verify(assertion("aud" => [audience, "https://other.example/"]), client: client, config: config)
+
+      expect(result).not_to be_success
+    end
+
     it "fails when a required claim is missing" do
       result = described_class.verify(assertion.then do
         JWT.encode(claims.except("jti"), rsa_key, "RS256", { typ: "oauth-id-jag+jwt" })

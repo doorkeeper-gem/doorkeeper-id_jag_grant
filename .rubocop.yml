@@ -44,7 +44,10 @@ Metrics/AbcSize:
   Max: 20
 
 Metrics/ClassLength:
-  Max: 150
+  Max: 170
+
+Metrics/ModuleLength:
+  Max: 120
 
 RSpec/SpecFilePathFormat:
   Enabled: false
