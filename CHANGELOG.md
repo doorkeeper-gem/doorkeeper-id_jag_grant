@@ -29,3 +29,4 @@
     (`identity_chaining_requested_token_types_supported` and
     `authorization_grant_profiles_supported`).
   - [#2] Explicit subject token validation hooks for IdP-side token exchange.
+  - [#3] Add config initializer template & rails generator.

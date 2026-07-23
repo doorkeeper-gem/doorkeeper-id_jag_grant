@@ -44,6 +44,12 @@ Then run:
 $ bundle install
 ```
 
+Then run the install generator to place the configuration template:
+
+```bash
+$ rails generate doorkeeper:id_jag_grant:install
+```
+
 ## How JWT crypto is handled
 
 For the **Resource AS role** (`jwt_bearer`), this gem verifies ID-JAG assertions
