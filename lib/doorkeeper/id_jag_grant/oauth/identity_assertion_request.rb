@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "jwt"
 
 module Doorkeeper
   module IdJagGrant
@@ -31,6 +32,8 @@ module Doorkeeper
         validate :client_supports_grant_flow, error: Doorkeeper::Errors::UnauthorizedClient
         validate :requested_token_type, error: Doorkeeper::IdJagGrant::Errors::UnsupportedTokenType
         validate :subject_token_type, error: Doorkeeper::Errors::InvalidRequest
+        validate :subject_token_binding, error: Doorkeeper::IdJagGrant::Errors::InvalidTarget
+        validate :refresh_token_policy, error: Doorkeeper::Errors::InvalidGrant
         validate :actor_token_type, error: Doorkeeper::Errors::InvalidRequest
         validate :authorization_details, error: Doorkeeper::Errors::InvalidRequest
         validate :encoder_configured, error: Doorkeeper::Errors::InvalidRequest
@@ -75,6 +78,8 @@ module Doorkeeper
           else
             @response = Doorkeeper::OAuth::ErrorResponse.from_request(self)
           end
+        rescue Doorkeeper::Errors::InvalidRequest
+          @response = Doorkeeper::OAuth::InvalidRequestResponse.from_request(self)
         end
 
         private
@@ -95,7 +100,23 @@ module Doorkeeper
             expires_in: id_jag_config.expires_in,
           )
 
-          id_jag_config.assertion_encoder.call(claims, token_exchange_context)
+          assertion = id_jag_config.assertion_encoder.call(claims, token_exchange_context)
+
+          # Guard: the encoder hook must set the `sub` claim (draft §3.1
+          # REQUIRED). Decode without verification — we are inspecting the
+          # payload the encoder produced, not trusting its signature.
+          begin
+            payload, _header = JWT.decode(assertion, nil, false)
+            unless payload["sub"].present?
+              raise Doorkeeper::Errors::InvalidRequest,
+                    "ID-JAG assertion_encoder did not set the required 'sub' claim"
+            end
+          rescue JWT::DecodeError
+            raise Doorkeeper::Errors::InvalidRequest,
+                  "ID-JAG assertion_encoder returned a malformed JWT"
+          end
+
+          assertion
         end
 
         def token_exchange_context
@@ -123,7 +144,9 @@ module Doorkeeper
         # decoding the subject token (which needs the JWT/SAML crypto that lives
         # outside core). The encoder hook receives the full context and is
         # expected to set the authoritative `sub`; this placeholder is only used
-        # when the hook does not override it.
+        # when the hook does not override it. A post-encode guard in
+        # `issue_assertion` enforces `sub` presence, so a misconfigured encoder
+        # fails loudly rather than shipping a token without `sub`.
         def subject_identifier
           nil
         end
@@ -160,6 +183,42 @@ module Doorkeeper
           ACCEPTED_SUBJECT_TOKEN_TYPES.include?(@subject_token_type)
         end
 
+        # draft §4.3.3: the subject token's audience MUST be bound to the
+        # requesting client. The optional +validate_subject_token+ hook
+        # decodes the subject token (JWT, SAML, or refresh token) and checks
+        # the audience/client match; when unconfigured the check is skipped
+        # (returns +true+), a deliberate backwards-compatible default.
+        def validate_subject_token_binding
+          hook = id_jag_config.validate_subject_token
+          return true unless hook.respond_to?(:call)
+          # A missing client is already rejected by `validate_client` earlier in
+          # the chain; reaching here without an application is a no-op pass-through.
+          return true unless client&.application
+
+          hook.call(@subject_token, @subject_token_type, client.application)
+        rescue StandardError
+          false
+        end
+
+        # draft §4.3.3 refresh-token policy: when the subject token is a
+        # refresh token, the optional +enforce_refresh_token_policy+ hook
+        # verifies it belongs to the client, is not expired, and is otherwise
+        # permitted for exchange; when unconfigured the check is skipped
+        # (returns +true+), a deliberate backwards-compatible default.
+        def validate_refresh_token_policy
+          return true unless @subject_token_type == Doorkeeper::IdJagGrant::TOKEN_TYPE_REFRESH_TOKEN
+
+          hook = id_jag_config.enforce_refresh_token_policy
+          return true unless hook.respond_to?(:call)
+          # A missing client is already rejected by `validate_client` earlier in
+          # the chain; reaching here without an application is a no-op pass-through.
+          return true unless client&.application
+
+          hook.call(@subject_token, client.application)
+        rescue StandardError
+          false
+        end
+
         def validate_actor_token_type
           return true if @actor_token.blank?
 
@@ -171,12 +230,12 @@ module Doorkeeper
           return true if @authorization_details.is_a?(Array)
           return false unless @authorization_details.is_a?(String)
 
-          parsed = JSON.parse(@authorization_details)
+          parsed = ::JSON.parse(@authorization_details)
           return false unless parsed.is_a?(Array)
 
           @authorization_details = parsed
           true
-        rescue JSON::ParserError
+        rescue ::JSON::ParserError
           false
         end
 

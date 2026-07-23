@@ -140,6 +140,36 @@ Doorkeeper::IdJagGrant.configure do
 
   # Lifetime, in seconds, of an issued ID-JAG (draft §4.3.4 expires_in).
   expires_in 300
+
+  # Optional: validate the subject token's audience is bound to the
+  # requesting client (draft §4.3.3). Returning false/nil rejects the
+  # exchange with `invalid_target`. Default: nil (permissive).
+  validate_subject_token do |subject_token, subject_token_type, application|
+    case subject_token_type
+    when "urn:ietf:params:oauth:token-type:id_token"
+      # Resolve the IdP's JWKS for a trusted issuer before verifying (do not fetch
+      # keys based solely on an unverified `iss` value).
+      unverified_payload = JWT.decode(subject_token, nil, false).first
+      jwks = jwks_for(unverified_payload["iss"]) # host: resolve issuer keys (e.g. JWKS URI)
+      decoded = JWT.decode(subject_token, nil, true, algorithms: ["RS256"], jwks: jwks).first
+      Array(decoded["aud"]).include?(application.uid)
+    when "urn:ietf:params:oauth:token-type:refresh_token"
+      # Ownership check only — lifecycle validation is deferred to
+      # enforce_refresh_token_policy below.
+      Doorkeeper::AccessToken.exists?(refresh_token: subject_token, application_id: application.id)
+    end
+  end
+
+  # Optional: enforce refresh-token lifecycle policy when the
+  # subject_token_type is a refresh token (draft §4.3.3). Returning
+  # false/nil rejects the exchange with `invalid_grant`. Only invoked
+  # for `urn:ietf:params:oauth:token-type:refresh_token`.
+  # Default: nil (permissive).
+  enforce_refresh_token_policy do |subject_token, application|
+    token = Doorkeeper::AccessToken.find_by(refresh_token: subject_token)
+    token&.application_id == application.id &&
+      !token.expired? && !token.revoked?
+  end
 end
 ```
 
@@ -183,6 +213,8 @@ All options are set inside the `Doorkeeper::IdJagGrant.configure` block.
 | `resolve_resource_owner`        | Resource AS | Subject resolution for the `assertion_decoder` path: `(claims, client) -> resource_owner`. Defaults to `sub`. |
 | `assertion_encoder`             | IdP         | `(claims, context) -> String` that signs and returns the compact ID-JAG JWT. |
 | `expires_in`                    | IdP         | Lifetime (seconds) of an issued ID-JAG. Default `300`. |
+| `validate_subject_token`        | IdP         | Optional `(subject_token, subject_token_type, Doorkeeper::Application) -> Boolean`. Validates the subject token's audience is bound to the requesting client (draft §4.3.3). Returns `invalid_target` on rejection. Default: `nil` (permissive). |
+| `enforce_refresh_token_policy`  | IdP         | Optional `(subject_token, Doorkeeper::Application) -> Boolean`. Enforces refresh-token lifecycle policy when `subject_token_type` is a refresh token (draft §4.3.3). Returns `invalid_grant` on rejection. Default: `nil` (permissive). Only invoked for `urn:ietf:params:oauth:token-type:refresh_token`. |
 
 ## Usage
 

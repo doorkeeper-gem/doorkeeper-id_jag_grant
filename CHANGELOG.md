@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0
+## main
 
 - Initial release. Adds support for the Identity Assertion JWT Authorization
   Grant (ID-JAG), `draft-ietf-oauth-identity-assertion-authz-grant`, as a
@@ -28,3 +28,4 @@
   - Advertises the ID-JAG RFC 8414 metadata parameters
     (`identity_chaining_requested_token_types_supported` and
     `authorization_grant_profiles_supported`).
+  - [#2] Explicit subject token validation hooks for IdP-side token exchange.

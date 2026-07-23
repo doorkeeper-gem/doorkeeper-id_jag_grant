@@ -3,3 +3,4 @@ en:
     errors:
       messages:
         unsupported_token_type: 'The authorization server does not support issuing the requested token type.'
+        invalid_target: 'The subject token is not bound to the requesting client.'
