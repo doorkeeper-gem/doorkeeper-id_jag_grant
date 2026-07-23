@@ -1,0 +1,86 @@
+AllCops:
+  TargetRubyVersion: 3.0
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "spec/dummy/**/*"
+    - "vendor/**/*"
+    - "gemfiles/**/*"
+
+plugins:
+  - rubocop-rspec
+
+Style/Documentation:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/FrozenStringLiteralComment:
+  Enabled: true
+
+# The request objects follow Doorkeeper's own convention of boolean-returning
+# `validate_*` predicate methods without a trailing `?`.
+Naming/PredicateMethod:
+  Enabled: false
+
+# Development dependencies are declared in the gemspec (as Doorkeeper does).
+Gemspec/DevelopmentDependencies:
+  EnforcedStyle: gemspec
+
+Metrics/AbcSize:
+  Max: 20
+
+Metrics/ClassLength:
+  Max: 150
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+# The extension is configured via an empty block to build the default config,
+# and version-dependent core objects (e.g. Doorkeeper's `issuer`) are stubbed
+# with plain doubles because they may not exist on the installed Doorkeeper.
+Lint/EmptyBlock:
+  Exclude:
+    - "spec/**/*"
+
+RSpec/VerifiedDoubles:
+  Enabled: false
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+
+Metrics/MethodLength:
+  Max: 20
+
+Layout/LineLength:
+  Max: 120
+
+Lint/MissingSuper:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/NestedGroups:
+  Max: 4
+
+RSpec/MessageSpies:
+  Enabled: false

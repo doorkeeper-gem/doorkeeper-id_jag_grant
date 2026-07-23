@@ -1,0 +1,5 @@
+en:
+  doorkeeper:
+    errors:
+      messages:
+        unsupported_token_type: 'The authorization server does not support issuing the requested token type.'
