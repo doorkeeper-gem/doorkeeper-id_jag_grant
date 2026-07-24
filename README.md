@@ -149,7 +149,7 @@ Doorkeeper::IdJagGrant.configure do
 
   # Optional: validate the subject token's audience is bound to the
   # requesting client (draft §4.3.3). Returning false/nil rejects the
-  # exchange with `invalid_target`. Default: nil (permissive).
+  # exchange with `invalid_grant`. Default: nil (permissive).
   validate_subject_token do |subject_token, subject_token_type, application|
     case subject_token_type
     when "urn:ietf:params:oauth:token-type:id_token"
@@ -219,7 +219,7 @@ All options are set inside the `Doorkeeper::IdJagGrant.configure` block.
 | `resolve_resource_owner`        | Resource AS | Subject resolution for the `assertion_decoder` path: `(claims, client) -> resource_owner`. Defaults to `sub`. |
 | `assertion_encoder`             | IdP         | `(claims, context) -> String` that signs and returns the compact ID-JAG JWT. |
 | `expires_in`                    | IdP         | Lifetime (seconds) of an issued ID-JAG. Default `300`. |
-| `validate_subject_token`        | IdP         | Optional `(subject_token, subject_token_type, Doorkeeper::Application) -> Boolean`. Validates the subject token's audience is bound to the requesting client (draft §4.3.3). Returns `invalid_target` on rejection. Default: `nil` (permissive). |
+| `validate_subject_token`        | IdP         | Optional `(subject_token, subject_token_type, Doorkeeper::Application) -> Boolean`. Validates the subject token's audience is bound to the requesting client (draft §4.3.3). Returns `invalid_grant` on rejection. Default: `nil` (permissive). |
 | `enforce_refresh_token_policy`  | IdP         | Optional `(subject_token, Doorkeeper::Application) -> Boolean`. Enforces refresh-token lifecycle policy when `subject_token_type` is a refresh token (draft §4.3.3). Returns `invalid_grant` on rejection. Default: `nil` (permissive). Only invoked for `urn:ietf:params:oauth:token-type:refresh_token`. |
 
 ## Usage

@@ -202,11 +202,11 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
             )
           end
 
-          it "rejects the exchange with invalid_target" do
+          it "rejects the exchange with invalid_grant" do
             post "/oauth/token", params: exchange_params, headers: authorization(client)
 
             expect(response).to have_http_status(:bad_request)
-            expect(json_response["error"]).to eq("invalid_target")
+            expect(json_response["error"]).to eq("invalid_grant")
           end
         end
 
@@ -217,11 +217,11 @@ RSpec.describe "Identity Assertion JWT Authorization Grant (ID-JAG)", type: :req
             )
           end
 
-          it "rejects the exchange with invalid_target" do
+          it "rejects the exchange with invalid_grant" do
             post "/oauth/token", params: exchange_params, headers: authorization(client)
 
             expect(response).to have_http_status(:bad_request)
-            expect(json_response["error"]).to eq("invalid_target")
+            expect(json_response["error"]).to eq("invalid_grant")
           end
         end
 
