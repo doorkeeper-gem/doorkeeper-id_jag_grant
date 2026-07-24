@@ -35,6 +35,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "appraisal"
   spec.add_development_dependency "database_cleaner-active_record", "~> 2.0"
   spec.add_development_dependency "factory_bot", "~> 6.0"
+  spec.add_development_dependency "generator_spec", "~> 0.10.0"
   spec.add_development_dependency "rake", ">= 11.3.0"
   spec.add_development_dependency "rspec-rails"
   spec.add_development_dependency "rubocop"
