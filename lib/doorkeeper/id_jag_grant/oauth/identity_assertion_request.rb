@@ -32,7 +32,7 @@ module Doorkeeper
         validate :client_supports_grant_flow, error: Doorkeeper::Errors::UnauthorizedClient
         validate :requested_token_type, error: Doorkeeper::IdJagGrant::Errors::UnsupportedTokenType
         validate :subject_token_type, error: Doorkeeper::Errors::InvalidRequest
-        validate :subject_token_binding, error: Doorkeeper::IdJagGrant::Errors::InvalidTarget
+        validate :subject_token_binding, error: Doorkeeper::IdJagGrant::Errors::InvalidGrant
         validate :refresh_token_policy, error: Doorkeeper::Errors::InvalidGrant
         validate :actor_token_type, error: Doorkeeper::Errors::InvalidRequest
         validate :authorization_details, error: Doorkeeper::Errors::InvalidRequest

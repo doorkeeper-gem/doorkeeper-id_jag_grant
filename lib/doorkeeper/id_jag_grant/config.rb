@@ -150,7 +150,7 @@ module Doorkeeper
       #   requesting client (draft §4.3.3). For JWT subject tokens the `aud`
       #   claim MUST match the client; for SAML assertions the audience MUST
       #   match; for refresh tokens the token MUST belong to the client.
-      #   Returning false/nil rejects the exchange with +invalid_target+.
+      #   Returning false/nil rejects the exchange with +invalid_grant+.
       #   @return [#call, nil]
       option :validate_subject_token, default: nil
 

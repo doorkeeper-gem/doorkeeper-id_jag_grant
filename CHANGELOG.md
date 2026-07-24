@@ -30,3 +30,7 @@
     `authorization_grant_profiles_supported`).
   - [#2] Explicit subject token validation hooks for IdP-side token exchange.
   - [#3] Add config initializer template & rails generator.
+  - [#4] Map subject-token binding validation failure to `invalid_grant`
+    instead of non-standard `invalid_target` (per draft §4.3.3, assertion
+    validation failures use `invalid_grant`; `invalid_target` is an RFC 8707
+    resource-indicator code).

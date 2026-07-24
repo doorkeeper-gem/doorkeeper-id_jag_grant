@@ -21,7 +21,7 @@ module Doorkeeper
       # hook returned false (or raised), indicating the binding check failed:
       # JWT `aud` claim, SAML `Audience`, or refresh-token ownership does not
       # match the client.
-      class InvalidTarget < Doorkeeper::Errors::BaseResponseError
+      class InvalidGrant < Doorkeeper::Errors::BaseResponseError
       end
     end
   end

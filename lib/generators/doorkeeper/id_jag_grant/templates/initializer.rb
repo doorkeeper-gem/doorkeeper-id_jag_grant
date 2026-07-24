@@ -37,7 +37,7 @@ Doorkeeper::IdJagGrant.configure do |config|
   # where +application+ is a +Doorkeeper::Application+ record. For JWT
   # subject tokens the `aud` claim MUST match the client; for SAML
   # assertions the audience MUST match; for refresh tokens the token MUST
-  # belong to the client. Return false/nil to reject with +invalid_target+.
+  # belong to the client. Return false/nil to reject with +invalid_grant+.
   #
   # config.validate_subject_token do |_subject_token, _token_type, _app|
   #   # Example: decode the subject token and verify aud matches the client.
